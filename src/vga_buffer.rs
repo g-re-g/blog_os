@@ -51,7 +51,7 @@ impl ColorCode {
     pub fn new(foreground: Color, background: Color) -> ColorCode {
         // A vga color is 1 byte 0bXXXX XXXX
         //               background^    ^foreground
-        ColorCode((background as u8) << 4 | (foreground as u8) | 0b10000000)
+        ColorCode((background as u8) << 4 | (foreground as u8))
     }
 }
 
