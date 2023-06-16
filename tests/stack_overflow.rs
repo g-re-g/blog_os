@@ -3,8 +3,8 @@
 #![no_std]
 #![no_main]
 
-use blog_os::gdt::DOUBLE_FAULT_IST_INDEX;
-use blog_os::{exit_qemu, serial_print, serial_println, QemuExitCode};
+use greg_os::gdt::DOUBLE_FAULT_IST_INDEX;
+use greg_os::{exit_qemu, serial_print, serial_println, QemuExitCode};
 use core::panic::PanicInfo;
 use lazy_static::lazy_static;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
@@ -27,7 +27,7 @@ lazy_static! {
 pub extern "C" fn _start() -> ! {
     serial_print!("stack_overflow::stack_overflow...\t");
     // Initialize the global descriptor table
-    blog_os::gdt::init();
+    greg_os::gdt::init();
     // Load the interrupt descriptor table
     TEST_IDT.load();
     // trigger a stack overflow
@@ -57,5 +57,5 @@ extern "x86-interrupt" fn test_double_fault_handler(
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    blog_os::test_panic_handler(info)
+    greg_os::test_panic_handler(info)
 }

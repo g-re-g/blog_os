@@ -4,7 +4,7 @@
 #![test_runner(test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-use blog_os::{exit_qemu, serial_println, QemuExitCode};
+use greg_os::{exit_qemu, serial_println, QemuExitCode};
 use core::panic::PanicInfo;
 
 #[panic_handler]
@@ -31,7 +31,7 @@ pub fn test_runner(tests: &[&dyn Fn()]) {
     exit_qemu(QemuExitCode::Success);
 }
 
-use blog_os::serial_print;
+use greg_os::serial_print;
 
 #[test_case]
 fn should_fail() {

@@ -5,15 +5,15 @@
 // Do not use the builtin rust test framework
 #![feature(custom_test_frameworks)]
 // Specify our custom test runner function
-#![test_runner(blog_os::test_runner)]
+#![test_runner(greg_os::test_runner)]
 // What name do we want to give the test harness main function
 #![reexport_test_harness_main = "test_main"]
 
 extern crate alloc;
 use alloc::boxed::Box;
-use blog_os::memory::{self, BootInfoFrameAllocator};
-use blog_os::task::{executor::Executor, keyboard, Task};
-use blog_os::{allocator, println};
+use greg_os::memory::{self, BootInfoFrameAllocator};
+use greg_os::task::{executor::Executor, keyboard, Task};
+use greg_os::{allocator, println};
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use x86_64::VirtAddr; // new
@@ -22,8 +22,8 @@ use x86_64::VirtAddr; // new
 entry_point!(kernel_main);
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    blog_os::vga_buffer::print_logo();
-    blog_os::init();
+    greg_os::vga_buffer::print_logo();
+    greg_os::init();
 
     #[cfg(test)]
     test_main();
@@ -57,11 +57,11 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
-    blog_os::hlt_loop();
+    greg_os::hlt_loop();
 }
 
 #[cfg(test)]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    blog_os::test_panic_handler(info)
+    greg_os::test_panic_handler(info)
 }

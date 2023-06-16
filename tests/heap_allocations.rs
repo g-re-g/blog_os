@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(custom_test_frameworks)]
-#![test_runner(blog_os::test_runner)]
+#![test_runner(greg_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
 extern crate alloc;
@@ -12,11 +12,11 @@ use core::panic::PanicInfo;
 entry_point!(main);
 
 fn main(boot_info: &'static BootInfo) -> ! {
-    use blog_os::allocator;
-    use blog_os::memory::{self, BootInfoFrameAllocator};
+    use greg_os::allocator;
+    use greg_os::memory::{self, BootInfoFrameAllocator};
     use x86_64::VirtAddr;
 
-    blog_os::init();
+    greg_os::init();
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
@@ -28,7 +28,7 @@ fn main(boot_info: &'static BootInfo) -> ! {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    blog_os::test_panic_handler(info)
+    greg_os::test_panic_handler(info)
 }
 
 use alloc::boxed::Box;
@@ -53,7 +53,7 @@ fn large_vec() {
     assert_eq!(vec.iter().sum::<u64>(), (n - 1) * n / 2);
 }
 
-use blog_os::allocator::HEAP_SIZE;
+use greg_os::allocator::HEAP_SIZE;
 
 #[test_case]
 fn many_boxes() {
