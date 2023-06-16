@@ -1,7 +1,15 @@
+// Tools for working with the standard VGA buffer. Namely the macros `print!`
+// and `println!`.
+//
+// more info:
+//    https://wiki.osdev.org/Printing_To_Screen
+//    https://en.wikipedia.org/wiki/VGA_text_mode
+//    https://en.wikipedia.org/wiki/Code_page_437
 use lazy_static::lazy_static;
 use spin::Mutex;
-use volatile::Volatile;
 
+// Static vga writer behind a mutex.
+// must be `lazy_static` because we need not const functions to initialize it.
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
@@ -10,6 +18,8 @@ lazy_static! {
     });
 }
 
+// Enum representing the standard foreground and background VGA colors
+// Convenient for greating VGA color code `u8`s
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -32,16 +42,20 @@ pub enum Color {
     White = 15,
 }
 
+// Convenince wrapper for the 1 byte VGA color code
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ColorCode(u8);
 
 impl ColorCode {
     pub fn new(foreground: Color, background: Color) -> ColorCode {
-        ColorCode((background as u8) << 4 | (foreground as u8))
+        // A vga color is 1 byte 0bXXXX XXXX
+        //               background^    ^foreground
+        ColorCode((background as u8) << 4 | (foreground as u8) | 0b10000000)
     }
 }
 
+// Convenience wrapper around a 2 byte VGA color code and a VGA character
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 struct ScreenChar {
@@ -54,7 +68,7 @@ const BUFFER_WIDTH: usize = 80;
 
 #[repr(transparent)]
 pub struct Buffer {
-    chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
+    chars: [[ScreenChar; BUFFER_WIDTH]; BUFFER_HEIGHT],
 }
 
 pub struct Writer {
@@ -66,12 +80,14 @@ pub struct Writer {
 impl Writer {
     pub fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
-            match byte {
-                // printable ASCII byte or newline
-                0x20..=0x7e | b'\n' => self.write_byte(byte),
-                // not part of printable ASCII range
-                _ => self.write_byte(0xfe),
-            }
+            // print everything for now
+            self.write_byte(byte)
+            // match byte {
+            //     // printable ASCII byte or newline
+            //     0x20..=0x7e | b'\n' => self.write_byte(byte),
+            //     // not part of printable ASCII range
+            //     _ => self.write_byte(0xfe),
+            // }
         }
     }
 
@@ -87,10 +103,20 @@ impl Writer {
                 let col = self.column_position;
 
                 let color_code = self.color_code;
-                self.buffer.chars[row][col].write(ScreenChar {
-                    ascii_character: byte,
-                    color_code,
-                });
+                // self.buffer.chars[row][col].write(ScreenChar {
+                //     ascii_character: byte,
+                //     color_code,
+                // });
+                unsafe {
+                    core::ptr::write_volatile(
+                        &mut self.buffer.chars[row][col],
+                        ScreenChar {
+                            ascii_character: byte,
+                            color_code,
+                        },
+                    );
+                }
+
                 self.column_position += 1;
             }
         }
@@ -99,8 +125,12 @@ impl Writer {
     fn new_line(&mut self) {
         for row in 1..BUFFER_HEIGHT {
             for col in 0..BUFFER_WIDTH {
-                let character = self.buffer.chars[row][col].read();
-                self.buffer.chars[row - 1][col].write(character);
+                unsafe {
+                    // let character = self.buffer.chars[row][col].read();
+                    let character = core::ptr::read_volatile(&self.buffer.chars[row][col]);
+                    // self.buffer.chars[row - 1][col].write(character);
+                    core::ptr::write_volatile(&mut self.buffer.chars[row - 1][col], character);
+                }
             }
         }
         self.clear_row(BUFFER_HEIGHT - 1);
@@ -113,7 +143,10 @@ impl Writer {
             color_code: self.color_code,
         };
         for col in 0..BUFFER_WIDTH {
-            self.buffer.chars[row][col].write(blank);
+            // self.buffer.chars[row][col].write(blank);
+            unsafe {
+                core::ptr::write_volatile(&mut self.buffer.chars[row][col], blank);
+            }
         }
     }
 }
@@ -147,6 +180,33 @@ pub fn _print(args: fmt::Arguments) {
     });
 }
 
+// TODO: cleanup
+pub fn print_logo() {
+    let s = "GregOS";
+    {
+        let mut w = WRITER.lock();
+        w.write_byte(0xC9);
+        for _ in 0..s.len() {
+            w.write_byte(0xCD);
+        }
+        w.write_byte(0xBB);
+        w.write_byte(b'\n');
+        w.write_byte(0xBA);
+    }
+    print!("{s}");
+    {
+        let mut w = WRITER.lock();
+        w.write_byte(0xBA);
+        w.write_byte(b'\n');
+        w.write_byte(0xC8);
+        for _ in 0..s.len() {
+            w.write_byte(0xCD);
+        }
+        w.write_byte(0xBC);
+        w.write_byte(b'\n');
+    }
+}
+
 #[test_case]
 fn test_println_simple() {
     println!("test_println_simple output");
@@ -169,7 +229,7 @@ fn test_println_output() {
         writeln!(writer, "\n{}", s).expect("writeln failed");
 
         for (i, c) in s.chars().enumerate() {
-            let screen_char = writer.buffer.chars[BUFFER_HEIGHT - 2][i].read();
+            let screen_char = writer.buffer.chars[BUFFER_HEIGHT - 2][i];
             assert_eq!(char::from(screen_char.ascii_character), c);
         }
     });

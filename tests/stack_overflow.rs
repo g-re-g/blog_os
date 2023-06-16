@@ -1,57 +1,50 @@
+// Test that a stack overflow gets handled by a double fault handler
 #![feature(abi_x86_interrupt)]
 #![no_std]
 #![no_main]
 
-use blog_os::serial_print;
-
+use blog_os::gdt::DOUBLE_FAULT_IST_INDEX;
+use blog_os::{exit_qemu, serial_print, serial_println, QemuExitCode};
 use core::panic::PanicInfo;
-
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
-    serial_print!("stack_overflow::stack_overflow...\t");
-
-    blog_os::gdt::init();
-    init_test_idt();
-
-    // trigger a stack overflow
-    stack_overflow();
-
-    panic!("Execution continued after stack overflow");
-}
-
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    blog_os::test_panic_handler(info)
-}
-
-#[allow(unconditional_recursion)]
-fn stack_overflow() {
-    stack_overflow(); // for each recursion, the return address is pushed
-    volatile::Volatile::new(0).read(); // prevent tail recursion optimizations
-}
-
 use lazy_static::lazy_static;
-use x86_64::structures::idt::InterruptDescriptorTable;
+use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 
+// Setup an IDT that just has a double fault handler
 lazy_static! {
     static ref TEST_IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
         unsafe {
             idt.double_fault
                 .set_handler_fn(test_double_fault_handler)
-                .set_stack_index(blog_os::gdt::DOUBLE_FAULT_IST_INDEX);
+                .set_stack_index(DOUBLE_FAULT_IST_INDEX);
         }
 
         idt
     };
 }
 
-pub fn init_test_idt() {
+#[no_mangle]
+pub extern "C" fn _start() -> ! {
+    serial_print!("stack_overflow::stack_overflow...\t");
+    // Initialize the global descriptor table
+    blog_os::gdt::init();
+    // Load the interrupt descriptor table
     TEST_IDT.load();
+    // trigger a stack overflow
+    stack_overflow();
+    // We should never get here
+    panic!("Execution continued after stack overflow");
 }
 
-use blog_os::{exit_qemu, serial_println, QemuExitCode};
-use x86_64::structures::idt::InterruptStackFrame;
+// This function forces a stack overflow by calling itself recursively
+// and forcing no tail call elimination.
+#[allow(unconditional_recursion)]
+fn stack_overflow() {
+    // for each recursion, the return address is pushed to the stack
+    stack_overflow();
+    // force a read to prevent tail call elimination
+    unsafe { core::ptr::read_volatile(0 as *mut usize) };
+}
 
 extern "x86-interrupt" fn test_double_fault_handler(
     _stack_frame: InterruptStackFrame,
@@ -60,4 +53,9 @@ extern "x86-interrupt" fn test_double_fault_handler(
     serial_println!("[ok]");
     exit_qemu(QemuExitCode::Success);
     loop {}
+}
+
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    blog_os::test_panic_handler(info)
 }
