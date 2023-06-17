@@ -9,10 +9,17 @@ use crossbeam_queue::ArrayQueue;
 use futures_util::stream::Stream;
 use futures_util::task::AtomicWaker;
 
+/// A struct for waking up a sleeping task
+/// https://doc.rust-lang.org/std/task/struct.Waker.html
+/// https://docs.rs/futures-util/latest/futures_util/task/struct.AtomicWaker.html
 static WAKER: AtomicWaker = AtomicWaker::new();
 
+/// A static queue for holding keyboard scancodes
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
+/// The max number of keyboard scancodes we can have in the queue
+const SCANCODE_QUEUE_LENGTH: usize = 100;
 
+/// A type for initializing and using the SCANCODE_QUEUE
 pub struct ScancodeStream {
     _private: (),
 }
@@ -20,12 +27,14 @@ pub struct ScancodeStream {
 impl ScancodeStream {
     pub fn new() -> Self {
         SCANCODE_QUEUE
-            .try_init_once(|| ArrayQueue::new(100))
+            .try_init_once(|| ArrayQueue::new(SCANCODE_QUEUE_LENGTH))
             .expect("ScancodeStream::new should only be called once");
         ScancodeStream { _private: () }
     }
 }
 
+/// Implementing the Stream trait for a stream of keyboard scancodes
+/// https://docs.rs/futures-util/latest/futures_util/stream/trait.Stream.html
 impl Stream for ScancodeStream {
     type Item = u8;
 
@@ -51,9 +60,8 @@ impl Stream for ScancodeStream {
     }
 }
 
-/// Called by the keyboard interrupt handler
-///
-/// Must not block or allocate.
+/// WARNING Called by the keyboard interrupt handler.
+/// WARNING Must not block or allocate.
 pub(crate) fn add_scancode(scancode: u8) {
     if let Ok(queue) = SCANCODE_QUEUE.try_get() {
         if queue.push(scancode).is_err() {
@@ -66,11 +74,11 @@ pub(crate) fn add_scancode(scancode: u8) {
     }
 }
 
-use crate::print;
-use futures_util::stream::StreamExt;
-use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
-
 pub async fn print_keypresses() {
+    use crate::print;
+    use futures_util::stream::StreamExt;
+    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+
     let mut scancodes = ScancodeStream::new();
     let mut keyboard = Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore);
 
