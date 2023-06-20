@@ -1,11 +1,23 @@
+// Handle Interrupts and CPU Exceptions.
+// Code in here must do the right thing but also do very little.
+// Code in here can be called at any time including in the middle locking up
+// resources and so must take care not to cause dead locks on resources or
+// subtle bugs of that nature.
+// See:
+//   https://wiki.osdev.org/Exceptions
+//   https://wiki.osdev.org/IRQ#Standard_ISA_IRQs
 use crate::hlt_loop;
-use crate::{gdt, print, println};
+use crate::{gdt, println};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
-pub const PIC_1_OFFSET: u8 = 32;
+// PIC interrupt vectors are default mapped to 0-7 and 9-15. This conflicts with
+// CPU exceptions and so we must move the base of these vectors to some non used
+// offset. Since 0x00 - 0x1F are reserved for exceptions we start at 0x20
+// See: https://wiki.osdev.org/PIC#Protected_Mode
+pub const PIC_1_OFFSET: u8 = 0x20;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
 pub static PICS: spin::Mutex<ChainedPics> =
@@ -20,8 +32,8 @@ lazy_static! {
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
-        idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
-        idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
+        idt[InterruptIndex::Timer as usize].set_handler_fn(timer_interrupt_handler);
+        idt[InterruptIndex::Keyboard as usize].set_handler_fn(keyboard_interrupt_handler);
         idt.page_fault.set_handler_fn(page_fault_handler);
         idt
     };
@@ -32,16 +44,6 @@ lazy_static! {
 pub enum InterruptIndex {
     Timer = PIC_1_OFFSET,
     Keyboard,
-}
-
-impl InterruptIndex {
-    fn as_u8(self) -> u8 {
-        self as u8
-    }
-
-    fn as_usize(self) -> usize {
-        usize::from(self.as_u8())
-    }
 }
 
 pub fn init_idt() {
@@ -64,9 +66,10 @@ extern "x86-interrupt" fn double_fault_handler(
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     // print!(".");
+    // TODO: increment atomic usize to count uptime ticks
     unsafe {
         PICS.lock()
-            .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+            .notify_end_of_interrupt(InterruptIndex::Timer as u8);
     }
 }
 
@@ -95,7 +98,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     // }
     // unsafe {
     //     PICS.lock()
-    //         .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
+    //         .notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
     // }
     use x86_64::instructions::port::Port;
 
@@ -105,7 +108,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
 
     unsafe {
         PICS.lock()
-            .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
+            .notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
     }
 }
 
