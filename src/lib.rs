@@ -14,15 +14,18 @@ pub mod serial;
 pub mod task;
 pub mod vga_buffer;
 extern crate alloc;
+use crate::memory::BootInfoFrameAllocator;
+use bootloader::BootInfo;
 use core::panic::PanicInfo;
+use x86_64::VirtAddr;
 
 #[cfg(test)]
-use bootloader::{entry_point, BootInfo};
+use bootloader::entry_point;
 
 #[cfg(test)]
 entry_point!(test_kernel_main);
 
-pub fn init() {
+pub fn init(boot_info: &'static BootInfo) {
     // Disable interrupts before we do anything
     x86_64::instructions::interrupts::disable();
     // Setup the interrupt descriptor table to handle interrupts
@@ -33,6 +36,13 @@ pub fn init() {
     unsafe { interrupts::PICS.lock().initialize() };
     // Enable interrupts
     x86_64::instructions::interrupts::enable();
+    // Initialize the heap
+    // TODO: put this in an initializer somewhere else
+    let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
+    let mut mapper = unsafe { memory::init(phys_mem_offset) };
+    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
+
+    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 }
 
 // Trait for wrapping test functions to get some nice output
@@ -75,8 +85,8 @@ pub fn test_panic_handler(info: &PanicInfo) -> ! {
 
 /// Entry point for `cargo test`
 #[cfg(test)]
-fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
-    init();
+fn test_kernel_main(boot_info: &'static BootInfo) -> ! {
+    init(boot_info);
     test_main();
     hlt_loop();
 }

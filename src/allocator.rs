@@ -57,3 +57,20 @@ pub fn init_heap(
 
     Ok(())
 }
+
+#[test_case]
+fn heap_allocation_and_freeing() {
+    use alloc::boxed::Box;
+    use alloc::format;
+    // Start of address space
+    let heap = Box::new(41);
+    assert_eq!(format!("{:p}", heap), format!("0x{:x}", HEAP_START));
+    // Next 16 bytes
+    let heap = Box::new(42);
+    assert_eq!(format!("{:p}", heap), format!("0x{:x}", HEAP_START + 16));
+    // Free up 16 bytes
+    drop(heap);
+    // Reuse previous 16 bytes
+    let heap = Box::new(42);
+    assert_eq!(format!("{:p}", heap), format!("0x{:x}", HEAP_START + 16));
+}
