@@ -8,6 +8,9 @@
 use lazy_static::lazy_static;
 use spin::Mutex;
 
+pub const BUFFER_HEIGHT: usize = 25;
+pub const BUFFER_WIDTH: usize = 80;
+
 // Static vga writer behind a mutex.
 // must be `lazy_static` because we need not const functions to initialize it.
 lazy_static! {
@@ -63,9 +66,6 @@ struct ScreenChar {
     color_code: ColorCode,
 }
 
-const BUFFER_HEIGHT: usize = 25;
-const BUFFER_WIDTH: usize = 80;
-
 #[repr(transparent)]
 pub struct Buffer {
     chars: [[ScreenChar; BUFFER_WIDTH]; BUFFER_HEIGHT],
@@ -90,6 +90,55 @@ impl Writer {
             // }
         }
     }
+
+    // TODO: total hack to get scrolling upward working. write a proper text
+    // buffer rendered mode
+    pub fn pre_write_line(&mut self, s: &str) {
+        // Clear the row and move text down
+        use x86_64::instructions::interrupts;
+        interrupts::without_interrupts(|| {
+            for row in 1..BUFFER_HEIGHT {
+                for col in 0..BUFFER_WIDTH {
+                    unsafe {
+                        // let character = self.buffer.chars[row][col].read();
+                        let character = core::ptr::read_volatile(
+                            &self.buffer.chars[BUFFER_HEIGHT - row - 1][col],
+                        );
+                        // self.buffer.chars[row - 1][col].write(character);
+                        core::ptr::write_volatile(
+                            &mut self.buffer.chars[BUFFER_HEIGHT - row][col],
+                            character,
+                        );
+                    }
+                }
+            }
+            self.clear_row(0);
+            self.column_position = 0;
+            let color_code = self.color_code;
+
+            for byte in s.bytes() {
+                let col = self.column_position;
+
+                // self.buffer.chars[row][col].write(ScreenChar {
+                //     ascii_character: byte,
+                //     color_code,
+                // });
+                unsafe {
+                    core::ptr::write_volatile(
+                        &mut self.buffer.chars[0][col],
+                        ScreenChar {
+                            ascii_character: byte,
+                            color_code,
+                        },
+                    );
+                }
+
+                self.column_position += 1;
+            }
+            self.column_position = 0;
+        });
+    }
+
     pub fn write_bytes(&mut self, bytes: &[u8]) {
         for byte in bytes {
             self.write_byte(*byte)
@@ -154,6 +203,21 @@ impl Writer {
             }
         }
     }
+
+    pub fn clear_screen(&mut self) {
+        let blank = ScreenChar {
+            ascii_character: b' ',
+            color_code: self.color_code,
+        };
+
+        for row in 0..BUFFER_HEIGHT {
+            for col in 0..BUFFER_WIDTH {
+                unsafe {
+                    core::ptr::write_volatile(&mut self.buffer.chars[row][col], blank);
+                }
+            }
+        }
+    }
 }
 
 use core::fmt;
@@ -193,13 +257,58 @@ pub fn center(w: &mut Writer, s: &str) {
     w.write_string(s)
 }
 
-// TODO: cleanup
+const CURSOR_ADDRESS_REGISTER: u16 = 0x3D4;
+const CURSOR_DATA_REGISTER: u16 = 0x3D5;
+
+pub fn disable_cursor() {
+    use x86_64::instructions::port::Port;
+    let mut address: Port<u8> = Port::new(CURSOR_ADDRESS_REGISTER);
+    let mut data: Port<u8> = Port::new(CURSOR_DATA_REGISTER);
+    unsafe {
+        address.write(0x0A);
+        data.write(0x20);
+    }
+}
+
+pub fn enable_cursor() {
+    use x86_64::instructions::port::Port;
+    let mut address: Port<u8> = Port::new(CURSOR_ADDRESS_REGISTER);
+    let mut data: Port<u8> = Port::new(CURSOR_DATA_REGISTER);
+    // Starting row
+    let cursor_start = 1;
+    // Ending row
+    let cursor_end = 2;
+    unsafe {
+        address.write(0x0A);
+        let b = data.read();
+        data.write((b & 0xC0) | cursor_start);
+
+        address.write(0x0B);
+        let b = data.read();
+        data.write((b & 0xE0) | cursor_end);
+    }
+}
+
+pub fn move_cursor(x: usize, y: usize) {
+    use x86_64::instructions::port::Port;
+    let position = x + y * BUFFER_WIDTH;
+    let mut address: Port<u8> = Port::new(CURSOR_ADDRESS_REGISTER);
+    let mut data: Port<u8> = Port::new(CURSOR_DATA_REGISTER);
+
+    unsafe {
+        address.write(0x0F as u8);
+        data.write((position & 0xFF) as u8);
+        address.write(0x0E as u8);
+        data.write(((position >> 8) & 0xFF) as u8);
+    }
+}
+
+// This is long and ugly because it uses characters from code page 437 and I
+// haven't figured out an easy way to input them or written a macro to make
+// this better.
 pub fn print_logo() {
     let s: &[u8] = &[b'G', b'r', b'e', b'g', 0x01, b'S'];
-    let woosh_in: &[u8] = &[0xB0, 0xB1, 0xB2];
-    let woosh_out: &[u8] = &[0xB2, 0xB1, 0xB0];
     let logo_width = s.len() + 4;
-    let logo_height = 5;
     let left_padding = BUFFER_WIDTH / 2 - logo_width / 2;
     let padd_left = {
         |w: &mut Writer| {
@@ -208,11 +317,10 @@ pub fn print_logo() {
             }
         }
     };
-    // let no_woosh_in: &[u8] = &[b' ', b' ', b' '];
     {
         let mut w = WRITER.lock();
+        w.color_code = ColorCode::new(Color::LightGreen, Color::Black);
         // Top Left
-        // w.write_bytes(&woosh_in);
         padd_left(&mut w);
         w.write_byte(0xC9);
         // Top Bar
@@ -221,11 +329,9 @@ pub fn print_logo() {
         }
         // Top Right
         w.write_byte(0xBB);
-        // w.write_bytes(&woosh_out);
         w.write_byte(b'\n');
         // Top margin left
         padd_left(&mut w);
-        // w.write_bytes(&woosh_in);
         w.write_byte(0xBA);
         // Top Margin
         for _ in 0..s.len() + 2 {
@@ -233,11 +339,9 @@ pub fn print_logo() {
         }
         // Top Margin right
         w.write_byte(0xBA);
-        // w.write_bytes(&woosh_out);
         w.write_byte(b'\n');
 
         // Middle left
-        // w.write_bytes(&woosh_in);
         padd_left(&mut w);
         w.write_byte(0xB6);
         // Middle margin
@@ -248,11 +352,9 @@ pub fn print_logo() {
         w.write_byte(b' ');
         // Middle right
         w.write_byte(0xC7);
-        // w.write_bytes(&woosh_out);
         w.write_byte(b'\n');
         // Bottom margin left
         padd_left(&mut w);
-        // w.write_bytes(&woosh_in);
         w.write_byte(0xBA);
         // Bottom Margin
         for _ in 0..s.len() + 2 {
@@ -262,7 +364,6 @@ pub fn print_logo() {
         w.write_byte(0xBA);
         w.write_byte(b'\n');
         // Bottom left
-        // w.write_bytes(&woosh_in);
         padd_left(&mut w);
         w.write_byte(0xC8);
         // Bottom bar
@@ -271,19 +372,24 @@ pub fn print_logo() {
         }
         // Bottom right
         w.write_byte(0xBC);
-        // w.write_bytes(&woosh_out);
         w.write_byte(b'\n');
         padd_left(&mut w);
 
         w.write_bytes(&[b'\n', b'\n', b'\n']);
+
+        w.color_code = ColorCode::new(Color::Yellow, Color::Black);
         center(&mut w, "< Press any key to continue >");
 
-        for _ in 0..8 {
+        for _ in 0..9 {
             w.write_byte(b'\n');
         }
 
         let time = alloc::format!("{:?}", crate::rtc::read_rtc());
+
+        w.color_code = ColorCode::new(Color::Magenta, Color::Black);
         center(&mut w, &time[0..time.len() - 2]);
+
+        w.color_code = ColorCode::new(Color::Yellow, Color::Black);
     }
 }
 
