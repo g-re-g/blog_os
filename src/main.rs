@@ -9,16 +9,17 @@
 // What name do we want to give the test harness main function
 #![reexport_test_harness_main = "test_main"]
 
+mod resume;
 extern crate alloc;
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
+use greg_os::println;
 use greg_os::task::{executor::Executor, keyboard, Task};
 
 // The entry point function to our kernel
 entry_point!(kernel_main);
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    greg_os::vga_buffer::print_logo();
     greg_os::init(boot_info);
 
     #[cfg(test)]
@@ -26,7 +27,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     // Asynchronous runtime executor
     let mut executor = Executor::new();
-    executor.spawn(Task::new(keyboard::print_keypresses()));
+    executor.spawn(Task::new(resume::main()));
     executor.run();
 }
 
@@ -34,7 +35,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    use greg_os::println;
     println!("{}", info);
     greg_os::hlt_loop();
 }

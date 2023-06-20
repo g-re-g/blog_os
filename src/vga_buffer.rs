@@ -90,6 +90,11 @@ impl Writer {
             // }
         }
     }
+    pub fn write_bytes(&mut self, bytes: &[u8]) {
+        for byte in bytes {
+            self.write_byte(*byte)
+        }
+    }
 
     pub fn write_byte(&mut self, byte: u8) {
         match byte {
@@ -180,30 +185,105 @@ pub fn _print(args: fmt::Arguments) {
     });
 }
 
+pub fn center(w: &mut Writer, s: &str) {
+    let left_padding = BUFFER_WIDTH / 2 - s.len() / 2;
+    for _ in 0..left_padding {
+        w.write_byte(b' ');
+    }
+    w.write_string(s)
+}
+
 // TODO: cleanup
 pub fn print_logo() {
-    let s = "GregOS";
+    let s: &[u8] = &[b'G', b'r', b'e', b'g', 0x01, b'S'];
+    let woosh_in: &[u8] = &[0xB0, 0xB1, 0xB2];
+    let woosh_out: &[u8] = &[0xB2, 0xB1, 0xB0];
+    let logo_width = s.len() + 4;
+    let logo_height = 5;
+    let left_padding = BUFFER_WIDTH / 2 - logo_width / 2;
+    let padd_left = {
+        |w: &mut Writer| {
+            for _ in 0..left_padding {
+                w.write_byte(b' ');
+            }
+        }
+    };
+    // let no_woosh_in: &[u8] = &[b' ', b' ', b' '];
     {
         let mut w = WRITER.lock();
+        // Top Left
+        // w.write_bytes(&woosh_in);
+        padd_left(&mut w);
         w.write_byte(0xC9);
-        for _ in 0..s.len() {
+        // Top Bar
+        for _ in 0..s.len() + 2 {
             w.write_byte(0xCD);
         }
+        // Top Right
         w.write_byte(0xBB);
+        // w.write_bytes(&woosh_out);
         w.write_byte(b'\n');
+        // Top margin left
+        padd_left(&mut w);
+        // w.write_bytes(&woosh_in);
         w.write_byte(0xBA);
-    }
-    print!("{s}");
-    {
-        let mut w = WRITER.lock();
+        // Top Margin
+        for _ in 0..s.len() + 2 {
+            w.write_byte(b' ');
+        }
+        // Top Margin right
+        w.write_byte(0xBA);
+        // w.write_bytes(&woosh_out);
+        w.write_byte(b'\n');
+
+        // Middle left
+        // w.write_bytes(&woosh_in);
+        padd_left(&mut w);
+        w.write_byte(0xB6);
+        // Middle margin
+        w.write_byte(b' ');
+        // Middle
+        w.write_bytes(s);
+        // middle margin
+        w.write_byte(b' ');
+        // Middle right
+        w.write_byte(0xC7);
+        // w.write_bytes(&woosh_out);
+        w.write_byte(b'\n');
+        // Bottom margin left
+        padd_left(&mut w);
+        // w.write_bytes(&woosh_in);
+        w.write_byte(0xBA);
+        // Bottom Margin
+        for _ in 0..s.len() + 2 {
+            w.write_byte(b' ');
+        }
+        // Bottom Margin right
         w.write_byte(0xBA);
         w.write_byte(b'\n');
+        // Bottom left
+        // w.write_bytes(&woosh_in);
+        padd_left(&mut w);
         w.write_byte(0xC8);
-        for _ in 0..s.len() {
+        // Bottom bar
+        for _ in 0..s.len() + 2 {
             w.write_byte(0xCD);
         }
+        // Bottom right
         w.write_byte(0xBC);
+        // w.write_bytes(&woosh_out);
         w.write_byte(b'\n');
+        padd_left(&mut w);
+
+        w.write_bytes(&[b'\n', b'\n', b'\n']);
+        center(&mut w, "< Press any key to continue >");
+
+        for _ in 0..8 {
+            w.write_byte(b'\n');
+        }
+
+        let time = alloc::format!("{:?}", crate::rtc::read_rtc());
+        center(&mut w, &time[0..time.len() - 2]);
     }
 }
 
