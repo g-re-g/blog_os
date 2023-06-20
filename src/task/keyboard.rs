@@ -74,26 +74,25 @@ pub(crate) fn add_scancode(scancode: u8) {
     }
 }
 
-pub async fn print_keypresses() {
-    use crate::print;
-    use futures_util::stream::StreamExt;
-    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+// pub async fn print_keypresses() {
+//     use crate::print;
+//     use futures_util::stream::StreamExt;
+//     use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 
-    let mut scancodes = ScancodeStream::new();
-    let mut keyboard = Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore);
+//     let mut scancodes = ScancodeStream::new();
+//     let mut keyboard = Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore);
 
-    while let Some(scancode) = scancodes.next().await {
-        if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-            if let Some(key) = keyboard.process_keyevent(key_event) {
-                let dt = crate::rtc::read_rtc();
+//     while let Some(scancode) = scancodes.next().await {
+//         if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
+//             if let Some(key) = keyboard.process_keyevent(key_event) {
+//                 let dt = crate::rtc::read_rtc();
 
-                println!("{:?}", dt);
+//                 println!("{:?}", dt);
 
-                match key {
-                    DecodedKey::Unicode(character) => print!("{}", character),
-                    DecodedKey::RawKey(key) => print!("{:?}", key),
-                }
-            }
-        }
-    }
-}
+//                 match key {
+//                     DecodedKey::Unicode(character) => print!("{}", character),
+//                     DecodedKey::RawKey(key) => print!("{:?}", key),
+//                 }
+//             }
+//         }
+//     }

@@ -38,8 +38,6 @@ pub async fn main() {
                                 state = States::Home;
                                 vga_buffer::disable_cursor();
                                 vga_buffer::print_logo();
-                            } else {
-                                print!("{}", character)
                             }
                         }
                         DecodedKey::RawKey(KeyCode::ArrowDown) => {
@@ -77,7 +75,7 @@ pub async fn main() {
                             cursor_x = (cursor_x.saturating_sub(1)).max(0);
                             vga_buffer::move_cursor(cursor_x, cursor_y);
                         }
-                        DecodedKey::RawKey(key) => print!("{:?}", key),
+                        _ => {} // DecodedKey::RawKey(key) => print!("{:?}", key),
                     },
                 }
             }
@@ -106,9 +104,7 @@ fn sub_line(line: usize) {
         .pre_write_line(TEXT.lines().nth(line + 1).unwrap_or(""));
 }
 
-pub static TEXT: &str = r###"
-================================================================================
-
+pub static TEXT: &str = r"
    ____                                                              _______   
   / ___|_ __ ___  __ _                                              |.-----.|  
  | |  _| '__/ _ \/ _` |                                             ||O . O||  
@@ -125,23 +121,25 @@ pub static TEXT: &str = r###"
  Some kind of computer programmer.
 
  Phone: 805-405-6638
- Email: greg@greg.work
+ Email: greggreg@gmail.com
  LinkedIn: https://linkedin.com/in/greg-baraghimian
 
+          - Use the arrow keys to scroll up and down for more -
 
 ================================================================================
 = ABOUT                                                                        =
 ================================================================================
 
-A passionate computer programmer with a knack for reading the documentation and
-figuring things out. Over the last 15+ years of my career I have moved further
-and further down the abstraction layers starting with ActionScript and
-finding myself recently in more and more Rust and Assembly. I'm motivated by
-hard problems and great teams and the never-stop-learning attitude of computer
-programming is what continually inspires me to push myself forward in my 
-career and passion for computers. I think great tools and documentation are
-extremely important and having been a teacher and mentor at a tech school I
-enjoy and understand the effectiveness of being able to explain things simply.
+A passionate computer programmer with a knack for reading the documentation,
+figuring things out, and helping others learn. Over the last 15+ years of my
+career I have written applications and systems for a wide variety of companies
+in a wide variety of technologies. Starting way back in the day as an
+ActionScript developer I find myself drawn further down the abstractions and
+closer to the metal. I'm driven by great teams and hard problems and thrive in
+the never-stop-learning mind set of computer programming. I think great tools
+and documentation are paramount and having been a teacher and mentor at a tech
+school I enjoy and understand the effectiveness of being able to explain things
+in a way anyone can understand.
 
 
 ================================================================================
@@ -160,7 +158,7 @@ first engineers on the project I helped design and implement virtually all of
 its systems. This includes everything from our best in class Elm frontend, our
 high throughput GraphQl API, our realtime grid-representing Elixir data model
 and API server, our many 3rd party control systems integrations, our event
-solving infrastructure and implementation, and our fork and  usage of the
+solving infrastructure and implementation, and our fork and usage of the
 IEC 60870 protocol library for communication with standard electrical grid
 devices. I helped bring the software from no lines of code written to getting
 sold to Fortune 1000 company Generac.
@@ -169,12 +167,12 @@ sold to Fortune 1000 company Generac.
 ~2015~
 Teacher and Mentor -at- Operation Spark code school
 
-I spent a year in New Orleans, writing software, writing curriculum, teaching,
+I spent a year in New Orleans writing software, writing curriculum, teaching,
 and mentoring at Operation Spark. It was an incredibly impactful and rewarding
 experience where I got to learn about and express many of the things that make
 me passionate about computing and this career, and also help folks understand
 that with a little motivation and the right foundation they have the capacity
-to do hard things and have a lot of fun learning.
+to write software and have a lot of fun learning too.
 
 
 ~2013-2014~
@@ -215,7 +213,7 @@ clients directly.
 
 
 ~2010~
-Web Developer and India Team Lead -at- Lime Wire LLC
+Web Developer and India Team Liaison -at- Lime Wire LLC
 Actionscript, Javascript, Python
 
 My time at Lime Wire was interesting. It was during the last year of their 
@@ -227,6 +225,9 @@ team and I signed up to be the communications liaison for that team on the media
 player project. This job and experience was incredibly rewarding and formative
 for my career. I did a ton of learning though working with an incredibly
 talented team and really began to solidify my love of this career.
+
+
+~Earlier positions available upon request~
 
 
 ================================================================================
@@ -262,7 +263,7 @@ https://github.com/leptos-rs/leptos/pulls?q=is%3Apr+author%3Ag-re-g
 = MISC                                                                         =
 ================================================================================
 
-Recently I have been much more interested in performance, protocols and how
+Recently I have been much more interested in performance, protocols, and how
 hardware is orchestrated into a useful machine. This was inspired by my work on
 SCADA protocols at Enbala and attempting to both write an NES emulator and a
 game for it. Recently I've been getting into operating system theory and and
@@ -273,8 +274,11 @@ I also ride motorcycles, play guitar, take photos, and go to french club.
 This resume can also be viewed online at:
   https:greg.work/resume
 
-This resume can also be run as a tiny little operating system:
+This resume can also be run as a tiny little x86 operating system:
   https://github.com/g-re-g/greg_os
 
+
+* References available on request! *
+
 ================================================================================
-"###;
+";
