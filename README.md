@@ -2,6 +2,8 @@
 An exploration in to how Operating Systems work and a cheeky way to display my
 resume.
 
+![Boot Screen](https://raw.githubusercontent.com/g-re-g/greg_os/main/images/boot.png "boot screen")
+
 Based heavily on the amazing https://os.phil-opp.com/ .
 
 ## Building
